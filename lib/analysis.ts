@@ -407,7 +407,10 @@ export function buildBiasReport(
   const daily = analyses.find((a) => a.interval === "1d");
   const h4 = analyses.find((a) => a.interval === "4h");
   const h1 = analyses.find((a) => a.interval === "1h");
-  const price = analyses[analyses.length - 1]?.close ?? 0;
+  // The live price must come from the FASTEST timeframe that loaded (5m), not the last
+  // entry in the list - that is the daily candle, which lags by hours.
+  const fastest = analyses[0];
+  const price = fastest?.close ?? 0;
   const dailyCandles = daily?.candles ?? [];
   const prevClose = dailyCandles.length > 1 ? dailyCandles[dailyCandles.length - 2].close : price;
 

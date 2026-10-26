@@ -1,5 +1,6 @@
 import type { Candle, Interval } from "../types";
 import { getSymbol, type SymbolSpec } from "../symbols";
+import { aggregate } from "../candles";
 
 /**
  * Candle feeds, tried in order so the dashboard keeps working when one source is down:
@@ -22,8 +23,9 @@ export type CandleResult = {
 };
 
 const TTL_MS: Record<Interval, number> = {
-  "5m": 45_000,
-  "15m": 60_000,
+  // Short enough that a dashboard refresh really does pick up the newest bar.
+  "5m": 20_000,
+  "15m": 45_000,
   "1h": 120_000,
   "4h": 240_000,
   "1d": 600_000,
@@ -190,24 +192,6 @@ async function fromStooq(spec: SymbolSpec): Promise<Candle[]> {
   return out;
 }
 
-/** Merge n consecutive candles into one (used to build 4h bars from 1h bars). */
-export function aggregate(candles: Candle[], factor: number): Candle[] {
-  const out: Candle[] = [];
-  for (let i = 0; i < candles.length; i += factor) {
-    const chunk = candles.slice(i, i + factor);
-    if (!chunk.length) continue;
-    out.push({
-      time: chunk[0].time,
-      open: chunk[0].open,
-      high: Math.max(...chunk.map((c) => c.high)),
-      low: Math.min(...chunk.map((c) => c.low)),
-      close: chunk[chunk.length - 1].close,
-      volume: chunk.reduce((a, c) => a + c.volume, 0),
-    });
-  }
-  return out;
-}
-
 export async function fetchCandles(
   symbolKey: string,
   interval: Interval,
@@ -259,13 +243,58 @@ export async function fetchCandles(
   throw new Error(`No candle feed reachable for ${spec.key} ${interval}. Tried: ${warnings.join(" | ")}`);
 }
 
-export async function fetchQuote(symbolKey: string): Promise<{ price: number; changePct: number }> {
-  const daily = await fetchCandles(symbolKey, "1d");
-  const candles = daily.candles;
-  const lastCandle = candles[candles.length - 1];
-  const prev = candles[candles.length - 2] ?? lastCandle;
-  return {
-    price: lastCandle.close,
-    changePct: prev.close ? ((lastCandle.close - prev.close) / prev.close) * 100 : 0,
+export { aggregate };
+
+/**
+ * Latest price between candle closes, from a 1-minute pull. The dashboard ticks on this so
+ * the headline price moves with the market instead of waiting for a 5-minute bar to close.
+ */
+export async function fetchSpot(symbolKey: string): Promise<{ price: number; at: number; provider: string }> {
+  const spec = getSymbol(symbolKey);
+  if (!spec) throw new Error(`Unknown symbol ${symbolKey}`);
+
+  if (spec.binance) {
+    for (const host of ["https://api.binance.com", "https://data-api.binance.vision"]) {
+      try {
+        const json = (await getJson(`${host}/api/v3/ticker/price?symbol=${spec.binance}`, 8000)) as {
+          price?: string;
+        };
+        const price = Number(json.price);
+        if (Number.isFinite(price) && price > 0) return { price, at: Date.now(), provider: "binance" };
+      } catch {
+        // next host
+      }
+    }
+  }
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+    spec.yahoo,
+  )}?interval=1m&range=1d`;
+  const json = (await getJson(url, 10_000)) as {
+    chart?: {
+      result?: {
+        meta?: { regularMarketPrice?: number; regularMarketTime?: number };
+        timestamp?: number[];
+        indicators?: { quote?: { close?: (number | null)[] }[] };
+      }[];
+    };
   };
+  const result = json.chart?.result?.[0];
+  const closes = result?.indicators?.quote?.[0]?.close ?? [];
+  for (let i = closes.length - 1; i >= 0; i--) {
+    const c = closes[i];
+    if (c != null && Number.isFinite(c)) {
+      const ts = result?.timestamp?.[i];
+      return { price: c, at: ts ? ts * 1000 : Date.now(), provider: "yahoo 1m" };
+    }
+  }
+  const meta = result?.meta;
+  if (meta?.regularMarketPrice) {
+    return {
+      price: meta.regularMarketPrice,
+      at: (meta.regularMarketTime ?? Math.floor(Date.now() / 1000)) * 1000,
+      provider: "yahoo meta",
+    };
+  }
+  throw new Error(`No spot price available for ${spec.key}`);
 }

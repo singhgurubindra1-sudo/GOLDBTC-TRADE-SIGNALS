@@ -1,22 +1,11 @@
-import { analyse, buildBiasReport, keyLevels, retracement, type Analysis } from "./analysis";
-import { fetchCalendar, newsBlackout, nextEventFor } from "./providers/calendar";
+import { fetchCalendar } from "./providers/calendar";
 import { fetchCandles } from "./providers/marketData";
-import { generateSignals } from "./strategies";
+import { assembleReport, TIMEFRAMES, type SymbolReport } from "./report";
 import { currentSession, istClock, sessionWindows } from "./sessions";
 import { PRIMARY_SYMBOL, SYMBOLS } from "./symbols";
-import type { BiasReport, Interval, NewsEvent, Signal } from "./types";
+import type { Candle, Interval, NewsEvent } from "./types";
 
-const TIMEFRAMES: Interval[] = ["5m", "15m", "1h", "4h", "1d"];
-
-export type SymbolReport = {
-  symbol: string;
-  bias: BiasReport;
-  signals: Signal[];
-  providers: Record<string, string>;
-  dataWarnings: string[];
-  nextEvent: NewsEvent | null;
-  blackout: { blocked: boolean; title: string | null; minutesAway: number | null };
-};
+export type { SymbolReport };
 
 export type DashboardPayload = {
   generatedAt: number;
@@ -32,7 +21,7 @@ export type DashboardPayload = {
 async function loadSymbol(symbol: string, events: NewsEvent[], now: Date): Promise<SymbolReport> {
   const providers: Record<string, string> = {};
   const dataWarnings: string[] = [];
-  const analyses: Record<string, Analysis> = {};
+  const candles: Partial<Record<Interval, Candle[]>> = {};
 
   const results = await Promise.all(
     TIMEFRAMES.map(async (tf) => {
@@ -50,48 +39,10 @@ async function loadSymbol(symbol: string, events: NewsEvent[], now: Date): Promi
     if (!res) continue;
     providers[tf] = res.stale ? `${res.provider} (stale)` : res.provider;
     if (res.warnings.length) dataWarnings.push(...res.warnings.map((w) => `${tf} ${w}`));
-    analyses[tf] = analyse(res.candles, tf);
+    candles[tf] = res.candles;
   }
 
-  const h1 = analyses["1h"];
-  const d1 = analyses["1d"];
-  if (!h1 || !d1) throw new Error(`Not enough data for ${symbol}: ${dataWarnings.join(" | ")}`);
-
-  const levels = keyLevels(h1.candles, d1.candles, now);
-  const retr = retracement((analyses["4h"] ?? h1).candles);
-  const bias = buildBiasReport(
-    symbol,
-    TIMEFRAMES.map((tf) => analyses[tf]).filter(Boolean),
-    levels,
-    retr,
-  );
-
-  const blackout = newsBlackout(events, now.getTime(), { beforeMin: 30, afterMin: 30 });
-  const nextEvent = nextEventFor(events, symbol, now.getTime());
-
-  const signals = generateSignals({
-    symbol,
-    analyses,
-    levels,
-    retracement: retr,
-    now,
-    blackout,
-    nextEvent,
-  });
-
-  return {
-    symbol,
-    bias,
-    signals,
-    providers,
-    dataWarnings,
-    nextEvent,
-    blackout: {
-      blocked: blackout.blocked,
-      title: blackout.event?.title ?? null,
-      minutesAway: blackout.minutesAway,
-    },
-  };
+  return assembleReport({ symbol, candles, events, now, providers, dataWarnings });
 }
 
 export async function buildDashboard(symbolKeys?: string[]): Promise<DashboardPayload> {

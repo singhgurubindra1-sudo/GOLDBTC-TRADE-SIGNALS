@@ -4,6 +4,8 @@ export type SymbolSpec = {
   label: string;
   /** TradingView symbol for the live chart widget. */
   tv: string;
+  /** Other TradingView feeds for the same market, if the default one does not load. */
+  tvAlternatives?: string[];
   /** Yahoo Finance ticker (primary data feed). */
   yahoo: string;
   /** Stooq ticker (fallback feed). */
@@ -27,6 +29,7 @@ export const SYMBOLS: SymbolSpec[] = [
     key: "XAUUSD",
     label: "Gold / USD",
     tv: "OANDA:XAUUSD",
+    tvAlternatives: ["FOREXCOM:XAUUSD", "FX_IDC:XAUUSD", "CAPITALCOM:GOLD", "TVC:GOLD", "COMEX:GC1!"],
     yahoo: "XAUUSD=X",
     stooq: "xauusd",
     currencies: ["USD", "ALL"],
@@ -40,6 +43,7 @@ export const SYMBOLS: SymbolSpec[] = [
     key: "BTCUSD",
     label: "Bitcoin / USD",
     tv: "BINANCE:BTCUSDT",
+    tvAlternatives: ["COINBASE:BTCUSD", "BITSTAMP:BTCUSD", "CRYPTO:BTCUSD"],
     yahoo: "BTC-USD",
     binance: "BTCUSDT",
     currencies: ["USD"],
@@ -52,6 +56,7 @@ export const SYMBOLS: SymbolSpec[] = [
     key: "XAGUSD",
     label: "Silver / USD",
     tv: "OANDA:XAGUSD",
+    tvAlternatives: ["FOREXCOM:XAGUSD", "CAPITALCOM:SILVER", "TVC:SILVER"],
     yahoo: "XAGUSD=X",
     stooq: "xagusd",
     currencies: ["USD"],
@@ -124,6 +129,7 @@ export const SYMBOLS: SymbolSpec[] = [
     key: "DXY",
     label: "Dollar Index",
     tv: "TVC:DXY",
+    tvAlternatives: ["CAPITALCOM:DXY", "ICEUS:DX1!"],
     yahoo: "DX-Y.NYB",
     currencies: ["USD"],
     digits: 3,
