@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #06090f;
+  --color-panel: #0d131d;
+  --color-panel2: #121a26;
+  --color-edge: #1e2a3a;
+  --color-gold: #e5b544;
+  --color-bull: #22c55e;
+  --color-bear: #ef4444;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  background: var(--color-ink);
+  color: #e6edf6;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-image: radial-gradient(1200px 600px at 20% -10%, rgba(229, 181, 68, 0.08), transparent 60%);
+}
+
+.panel {
+  background: var(--color-panel);
+  border: 1px solid var(--color-edge);
+  border-radius: 0.9rem;
+}
+
+.panel-soft {
+  background: var(--color-panel2);
+  border: 1px solid var(--color-edge);
+  border-radius: 0.7rem;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes pulseRing {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+  70% { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.alert-pulse {
+  animation: pulseRing 1.6s infinite;
+}
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: #0a0f17; }
+::-webkit-scrollbar-thumb { background: #223043; border-radius: 9px; }
